@@ -63,7 +63,7 @@ export default function CreateTeamScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <TouchableOpacity style={styles.back} onPress={() => router.back()}>
+      <TouchableOpacity style={styles.back} onPress={() => router.canGoBack() ? router.back() : router.push('/(app)/teams')}>
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
 

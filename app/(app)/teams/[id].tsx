@@ -65,7 +65,7 @@ export default function TeamDetailScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <TouchableOpacity style={styles.back} onPress={() => router.back()}>
+      <TouchableOpacity style={styles.back} onPress={() => router.canGoBack() ? router.back() : router.push('/(app)/teams')}>
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
 
@@ -93,6 +93,13 @@ export default function TeamDetailScreen() {
         <Text style={styles.inviteCode}>{team.inviteCode}</Text>
         <Text style={styles.inviteHint}>Share this with friends to join</Text>
       </View>
+
+      <TouchableOpacity
+        style={styles.checkInBtn}
+        onPress={() => router.push({ pathname: '/(app)/check-in', params: { teamId: team.id } })}
+      >
+        <Text style={styles.checkInBtnText}>📸  Check In Today</Text>
+      </TouchableOpacity>
 
       <Text style={styles.sectionTitle}>Members</Text>
       {members.length === 0 ? (
@@ -155,6 +162,8 @@ const styles = StyleSheet.create({
   inviteLabel: { color: '#555', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
   inviteCode: { color: '#fff', fontSize: 36, fontWeight: '800', letterSpacing: 10 },
   inviteHint: { color: '#444', fontSize: 12, marginTop: 8 },
+  checkInBtn: { backgroundColor: '#fff', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 28 },
+  checkInBtnText: { color: '#000', fontWeight: '700', fontSize: 15 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#fff', marginBottom: 12 },
   noMembers: { color: '#444', fontSize: 14 },
   memberCard: {

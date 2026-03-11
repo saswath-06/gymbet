@@ -66,7 +66,7 @@ export default function JoinTeamScreen() {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.back} onPress={() => router.back()}>
+      <TouchableOpacity style={styles.back} onPress={() => router.canGoBack() ? router.back() : router.push('/(app)/teams')}>
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
 

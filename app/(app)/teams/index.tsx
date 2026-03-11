@@ -23,6 +23,9 @@ export default function TeamsScreen() {
 
   return (
     <View style={styles.container}>
+      <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/(app)')}>
+        <Text style={styles.backText}>← Home</Text>
+      </TouchableOpacity>
       <View style={styles.header}>
         <Text style={styles.title}>My Teams</Text>
         <View style={styles.headerActions}>
@@ -92,4 +95,6 @@ const styles = StyleSheet.create({
   statusText: { color: '#aaa', fontSize: 11, fontWeight: '600', textTransform: 'uppercase' },
   cardWager: { color: '#4ade80', fontSize: 14, fontWeight: '600' },
   cardMembers: { color: '#555', fontSize: 13, marginTop: 2 },
+  backBtn: { marginBottom: 8 },
+  backText: { color: '#666', fontSize: 14 },
 });

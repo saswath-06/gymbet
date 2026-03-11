@@ -29,6 +29,12 @@
     "scheme": "gymbet",
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b77c7f3a-ee68-4215-bcb5-2d29a6325885"
+      }
+    }
   }
 }
