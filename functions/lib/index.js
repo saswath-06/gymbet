@@ -106,13 +106,21 @@ exports.verifyGymPhoto = (0, https_1.onCall)({ secrets: ['OPENAI_API_KEY'], time
 // Finds all active team members whose workout day was yesterday but have no
 // verified check-in, marks them as missed, and updates their totalMissed count.
 // (Stripe penalty transfers added in the stripe-integration phase.)
-exports.processDailyMissed = (0, scheduler_1.onSchedule)({ schedule: '0 0 * * *', timeZone: 'UTC', timeoutSeconds: 540 }, async () => {
-    const yesterday = new Date();
-    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-    const dateStr = yesterday.toISOString().split('T')[0]; // e.g. "2025-03-10"
-    // Day-of-week name matching our WorkoutDay type
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const yesterdayDayName = dayNames[yesterday.getUTCDay()];
+// Returns yesterday's date string and day name in a given IANA timezone
+function getYesterdayInTz(timezone) {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const dateStr = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(yesterday); // returns YYYY-MM-DD
+    const dayName = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone, weekday: 'long',
+    }).format(yesterday).toLowerCase();
+    return { dateStr, dayName };
+}
+exports.processDailyMissed = (0, scheduler_1.onSchedule)(
+// 09:00 UTC = 04:00 EST / 01:00 PST — safely past midnight in all US timezones
+{ schedule: '0 9 * * *', timeZone: 'UTC', timeoutSeconds: 540 }, async () => {
+    var _a;
     // Fetch all active teams
     const teamsSnap = await db
         .collection('teams')
@@ -124,11 +132,13 @@ exports.processDailyMissed = (0, scheduler_1.onSchedule)({ schedule: '0 0 * * *'
     let batchCount = 0;
     for (const teamDoc of teamsSnap.docs) {
         const team = teamDoc.data();
+        // Use the team's stored timezone (fall back to UTC if missing)
+        const { dateStr, dayName: yesterdayDayName } = getYesterdayInTz((_a = team.timezone) !== null && _a !== void 0 ? _a : 'UTC');
+        const yesterday = new Date(dateStr);
         // Only process teams whose period includes yesterday
         const start = team.startDate;
         const end = team.endDate;
-        if (yesterday < start.toDate() ||
-            yesterday > end.toDate())
+        if (yesterday < start.toDate() || yesterday > end.toDate())
             continue;
         // Get all members for this team
         const membersSnap = await db

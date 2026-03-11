@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { getTeam, getTeamMembers, getUser } from '../../../src/lib/firestore';
+import { getTeam, getTeamMembers, getUser, deleteTeam } from '../../../src/lib/firestore';
+import { useAuth } from '../../../src/context/AuthContext';
 import type { TeamDoc, TeamMemberDoc, UserDoc, WorkoutDay } from '../../../src/types';
 
 const DAY_LABELS: Record<WorkoutDay, string> = {
@@ -14,11 +15,37 @@ const DAY_LABELS: Record<WorkoutDay, string> = {
 export default function TeamDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { user } = useAuth();
 
   const [team, setTeam] = useState<TeamDoc | null>(null);
   const [members, setMembers] = useState<TeamMemberDoc[]>([]);
   const [users, setUsers] = useState<Record<string, UserDoc>>({});
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+
+  function handleDelete() {
+    Alert.alert(
+      'Delete Team',
+      'This will permanently delete the team and all member records. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              await deleteTeam(id, user!.uid);
+              router.replace('/(app)/teams');
+            } catch (e: any) {
+              Alert.alert('Error', e.message ?? 'Failed to delete team.');
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -101,6 +128,16 @@ export default function TeamDetailScreen() {
         <Text style={styles.checkInBtnText}>📸  Check In Today</Text>
       </TouchableOpacity>
 
+      {user?.uid === team.creatorId && (
+        <TouchableOpacity
+          style={styles.deleteBtn}
+          onPress={handleDelete}
+          disabled={deleting}
+        >
+          <Text style={styles.deleteBtnText}>{deleting ? 'Deleting…' : 'Delete Team'}</Text>
+        </TouchableOpacity>
+      )}
+
       <Text style={styles.sectionTitle}>Members</Text>
       {members.length === 0 ? (
         <Text style={styles.noMembers}>No member schedules set yet.</Text>
@@ -181,4 +218,9 @@ const styles = StyleSheet.create({
   memberStats: { flexDirection: 'row', justifyContent: 'space-between' },
   memberStatMissed: { color: '#ff4d4d', fontSize: 12 },
   memberStatEarned: { color: '#4ade80', fontSize: 12 },
+  deleteBtn: {
+    borderWidth: 1, borderColor: '#3a0d0d', borderRadius: 12,
+    padding: 14, alignItems: 'center', marginBottom: 28,
+  },
+  deleteBtnText: { color: '#ff4d4d', fontWeight: '600', fontSize: 14 },
 });

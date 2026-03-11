@@ -5,6 +5,7 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  deleteDoc,
   query,
   where,
   serverTimestamp,
@@ -34,6 +35,7 @@ export async function createTeam(
   wagerAmount: number,
   startDate: Date,
   endDate: Date,
+  timezone: string,
 ): Promise<TeamDoc> {
   const ref = doc(collection(db, 'teams'));
   const team: TeamDoc = {
@@ -46,6 +48,7 @@ export async function createTeam(
     status: 'pending',
     memberIds: [creatorId],
     inviteCode: generateInviteCode(),
+    timezone,
     createdAt: serverTimestamp() as Timestamp,
   };
   await setDoc(ref, team);
@@ -77,6 +80,21 @@ export async function joinTeam(teamId: string, userId: string): Promise<void> {
   const team = snap.data() as TeamDoc;
   if (team.memberIds.includes(userId)) throw new Error('Already a member');
   await updateDoc(ref, { memberIds: [...team.memberIds, userId] });
+}
+
+export async function deleteTeam(teamId: string, requestingUid: string): Promise<void> {
+  const ref = doc(db, 'teams', teamId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('Team not found');
+  const team = snap.data() as TeamDoc;
+  if (team.creatorId !== requestingUid) throw new Error('Only the creator can delete this team.');
+
+  // Delete all teamMember docs
+  const membersSnap = await getDocs(query(collection(db, 'teamMembers'), where('teamId', '==', teamId)));
+  await Promise.all(membersSnap.docs.map((d: { ref: Parameters<typeof deleteDoc>[0] }) => deleteDoc(d.ref)));
+
+  // Delete the team itself
+  await deleteDoc(ref);
 }
 
 // ─── Team Members ─────────────────────────────────────────────────────────────

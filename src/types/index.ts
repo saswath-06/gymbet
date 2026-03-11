@@ -27,6 +27,7 @@ export interface TeamDoc {
   status: TeamStatus;
   memberIds: string[];
   inviteCode: string;          // 6-char uppercase code for joining
+  timezone: string;            // IANA timezone, e.g. "America/New_York"
   createdAt: Timestamp;
 }
 

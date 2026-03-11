@@ -86,16 +86,22 @@ export const verifyGymPhoto = onCall(
 // verified check-in, marks them as missed, and updates their totalMissed count.
 // (Stripe penalty transfers added in the stripe-integration phase.)
 
-export const processDailyMissed = onSchedule(
-  { schedule: '0 0 * * *', timeZone: 'UTC', timeoutSeconds: 540 },
-  async () => {
-    const yesterday = new Date();
-    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-    const dateStr = yesterday.toISOString().split('T')[0]; // e.g. "2025-03-10"
+// Returns yesterday's date string and day name in a given IANA timezone
+function getYesterdayInTz(timezone: string): { dateStr: string; dayName: string } {
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const dateStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(yesterday); // returns YYYY-MM-DD
+  const dayName = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone, weekday: 'long',
+  }).format(yesterday).toLowerCase();
+  return { dateStr, dayName };
+}
 
-    // Day-of-week name matching our WorkoutDay type
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const yesterdayDayName = dayNames[yesterday.getUTCDay()];
+export const processDailyMissed = onSchedule(
+  // 09:00 UTC = 04:00 EST / 01:00 PST — safely past midnight in all US timezones
+  { schedule: '0 9 * * *', timeZone: 'UTC', timeoutSeconds: 540 },
+  async () => {
 
     // Fetch all active teams
     const teamsSnap = await db
@@ -111,13 +117,16 @@ export const processDailyMissed = onSchedule(
     for (const teamDoc of teamsSnap.docs) {
       const team = teamDoc.data();
 
+      // Use the team's stored timezone (fall back to UTC if missing)
+      const { dateStr, dayName: yesterdayDayName } = getYesterdayInTz(
+        team.timezone ?? 'UTC'
+      );
+      const yesterday = new Date(dateStr);
+
       // Only process teams whose period includes yesterday
       const start: admin.firestore.Timestamp = team.startDate;
       const end: admin.firestore.Timestamp = team.endDate;
-      if (
-        yesterday < start.toDate() ||
-        yesterday > end.toDate()
-      ) continue;
+      if (yesterday < start.toDate() || yesterday > end.toDate()) continue;
 
       // Get all members for this team
       const membersSnap = await db

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, ActivityIndicator, Platform,
+  ScrollView, ActivityIndicator, Modal, FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../../src/context/AuthContext';
@@ -14,6 +14,21 @@ const DAY_LABELS: Record<WorkoutDay, string> = {
   friday: 'Fri', saturday: 'Sat', sunday: 'Sun',
 };
 
+const TIMEZONES = [
+  { label: 'US Eastern (New York)',     value: 'America/New_York' },
+  { label: 'US Central (Chicago)',      value: 'America/Chicago' },
+  { label: 'US Mountain (Denver)',      value: 'America/Denver' },
+  { label: 'US Pacific (Los Angeles)',  value: 'America/Los_Angeles' },
+  { label: 'US Alaska',                 value: 'America/Anchorage' },
+  { label: 'US Hawaii',                 value: 'Pacific/Honolulu' },
+  { label: 'UK (London)',               value: 'Europe/London' },
+  { label: 'Central Europe (Paris)',    value: 'Europe/Paris' },
+  { label: 'India (Kolkata)',           value: 'Asia/Kolkata' },
+  { label: 'China (Shanghai)',          value: 'Asia/Shanghai' },
+  { label: 'Japan (Tokyo)',             value: 'Asia/Tokyo' },
+  { label: 'Australia East (Sydney)',   value: 'Australia/Sydney' },
+];
+
 export default function CreateTeamScreen() {
   const { user } = useAuth();
   const router = useRouter();
@@ -23,6 +38,8 @@ export default function CreateTeamScreen() {
   const [selectedDays, setSelectedDays] = useState<WorkoutDay[]>([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [timezone, setTimezone] = useState('America/New_York');
+  const [tzPickerOpen, setTzPickerOpen] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -51,7 +68,7 @@ export default function CreateTeamScreen() {
     setError('');
     setLoading(true);
     try {
-      const team = await createTeam(user!.uid, name.trim(), wagerNum, start, end);
+      const team = await createTeam(user!.uid, name.trim(), wagerNum, start, end, timezone);
       await setTeamMember(team.id, user!.uid, selectedDays);
       router.replace(`/(app)/teams/${team.id}`);
     } catch (e: any) {
@@ -60,6 +77,8 @@ export default function CreateTeamScreen() {
       setLoading(false);
     }
   }
+
+  const tzLabel = TIMEZONES.find((t) => t.value === timezone)?.label ?? timezone;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -107,6 +126,12 @@ export default function CreateTeamScreen() {
         onChangeText={setEndDate}
       />
 
+      <Text style={styles.label}>Timezone</Text>
+      <TouchableOpacity style={styles.tzBtn} onPress={() => setTzPickerOpen(true)}>
+        <Text style={styles.tzBtnText}>{tzLabel}</Text>
+        <Text style={styles.tzChevron}>▾</Text>
+      </TouchableOpacity>
+
       <Text style={styles.label}>Your Workout Days</Text>
       <View style={styles.daysRow}>
         {DAYS.map((day) => (
@@ -130,6 +155,35 @@ export default function CreateTeamScreen() {
       <TouchableOpacity style={styles.button} onPress={handleCreate} disabled={loading}>
         {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.buttonText}>Create Team</Text>}
       </TouchableOpacity>
+
+      {/* Timezone picker modal */}
+      <Modal visible={tzPickerOpen} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Timezone</Text>
+              <TouchableOpacity onPress={() => setTzPickerOpen(false)}>
+                <Text style={styles.modalClose}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={TIMEZONES}
+              keyExtractor={(item) => item.value}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.tzOption, item.value === timezone && styles.tzOptionActive]}
+                  onPress={() => { setTimezone(item.value); setTzPickerOpen(false); }}
+                >
+                  <Text style={[styles.tzOptionText, item.value === timezone && styles.tzOptionTextActive]}>
+                    {item.label}
+                  </Text>
+                  {item.value === timezone && <Text style={styles.tzCheck}>✓</Text>}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -146,6 +200,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#141414', borderWidth: 1, borderColor: '#222',
     borderRadius: 12, padding: 14, color: '#fff', fontSize: 15,
   },
+  tzBtn: {
+    backgroundColor: '#141414', borderWidth: 1, borderColor: '#222',
+    borderRadius: 12, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+  },
+  tzBtnText: { color: '#fff', fontSize: 15 },
+  tzChevron: { color: '#555', fontSize: 14 },
   daysRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   dayBtn: {
     borderWidth: 1, borderColor: '#2a2a2a', borderRadius: 8,
@@ -161,4 +221,15 @@ const styles = StyleSheet.create({
     alignItems: 'center', marginTop: 32,
   },
   buttonText: { color: '#000', fontWeight: '700', fontSize: 15 },
+  // Modal
+  modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
+  modalSheet: { backgroundColor: '#141414', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '60%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#222' },
+  modalTitle: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  modalClose: { color: '#4ade80', fontSize: 15, fontWeight: '600' },
+  tzOption: { paddingVertical: 16, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#1a1a1a' },
+  tzOptionActive: { backgroundColor: '#0d2e1a' },
+  tzOptionText: { color: '#aaa', fontSize: 15 },
+  tzOptionTextActive: { color: '#fff', fontWeight: '600' },
+  tzCheck: { color: '#4ade80', fontSize: 15, fontWeight: '700' },
 });
