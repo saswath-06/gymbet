@@ -1,11 +1,35 @@
-import { Stack } from 'expo-router';
+import { useEffect } from 'react';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { AuthProvider, useAuth } from '../src/context/AuthContext';
+
+function RootLayoutNav() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const segments = useSegments();
+
+  useEffect(() => {
+    if (loading) return;
+    const inAuthGroup = segments[0] === '(auth)';
+    if (!user && !inAuthGroup) {
+      router.replace('/(auth)/sign-in');
+    } else if (user && inAuthGroup) {
+      router.replace('/(app)');
+    }
+  }, [user, loading, segments]);
+
+  return (
+    <>
+      <StatusBar style="light" />
+      <Stack screenOptions={{ headerShown: false }} />
+    </>
+  );
+}
 
 export default function RootLayout() {
   return (
-    <>
-      <StatusBar style="auto" />
-      <Stack screenOptions={{ headerShown: false }} />
-    </>
+    <AuthProvider>
+      <RootLayoutNav />
+    </AuthProvider>
   );
 }
