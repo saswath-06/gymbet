@@ -1,0 +1,55 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Users ──────────────────────────────────────────────────────────────
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // ── Teams ──────────────────────────────────────────────────────────────
+    match /teams/{teamId} {
+      allow read: if request.auth != null;
+      // create: authenticated users only
+      allow create: if request.auth != null
+        && request.resource.data.creatorId == request.auth.uid;
+      // update: only members can update (e.g. joining)
+      allow update: if request.auth != null
+        && request.auth.uid in resource.data.memberIds;
+    }
+
+    // ── Team Members ───────────────────────────────────────────────────────
+    match /teamMembers/{memberId} {
+      allow read: if request.auth != null;
+      // only the user themselves can write their own member doc
+      allow write: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.userId;
+    }
+
+    // ── Workout Logs ───────────────────────────────────────────────────────
+    match /workoutLogs/{logId} {
+      allow read: if request.auth != null;
+      // users can create/update their own logs
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+    }
+
+    // ── Payments ───────────────────────────────────────────────────────────
+    match /payments/{paymentId} {
+      // read-only for authenticated users; writes handled server-side only
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // ── Health check (dev only) ────────────────────────────────────────────
+    match /_health/{doc} {
+      allow read, write: if true;
+    }
+  }
+}
