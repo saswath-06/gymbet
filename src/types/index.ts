@@ -11,8 +11,11 @@ export interface UserDoc {
   uid: string;
   email: string;
   displayName: string;
-  stripeAccountId?: string;
-  stripeCustomerId?: string;
+  stripeAccountId?: string;   // Stripe Connect Express account (for receiving payouts)
+  stripeCustomerId?: string;  // Stripe Customer (for charging)
+  stripePaymentMethodId?: string; // saved card for off-session charges
+  cardLast4?: string;
+  cardBrand?: string;
   createdAt: Timestamp;
 }
 
@@ -28,6 +31,7 @@ export interface TeamDoc {
   memberIds: string[];
   inviteCode: string;          // 6-char uppercase code for joining
   timezone: string;            // IANA timezone, e.g. "America/New_York"
+  currency: 'cad' | 'usd';    // payment currency for all Stripe charges on this team
   createdAt: Timestamp;
 }
 
@@ -38,6 +42,7 @@ export interface TeamMemberDoc {
   workoutDays: WorkoutDay[];   // days this member committed to
   totalMissed: number;
   totalEarned: number;         // in dollars
+  escrowPaymentIntentId?: string; // PaymentIntent ID for the initial escrow charge
   joinedAt: Timestamp;
 }
 

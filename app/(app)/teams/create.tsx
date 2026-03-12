@@ -4,6 +4,7 @@ import {
   ScrollView, ActivityIndicator, Modal, FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useAuth } from '../../../src/context/AuthContext';
 import { createTeam, setTeamMember } from '../../../src/lib/firestore';
 import type { WorkoutDay } from '../../../src/types';
@@ -32,6 +33,7 @@ const TIMEZONES = [
 export default function CreateTeamScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const functions = getFunctions();
 
   const [name, setName] = useState('');
   const [wager, setWager] = useState('');
@@ -40,7 +42,9 @@ export default function CreateTeamScreen() {
   const [endDate, setEndDate] = useState('');
   const [timezone, setTimezone] = useState('America/New_York');
   const [tzPickerOpen, setTzPickerOpen] = useState(false);
+  const [currency, setCurrency] = useState<'cad' | 'usd'>('cad');
   const [error, setError] = useState('');
+  const [noPaymentMethod, setNoPaymentMethod] = useState(false);
   const [loading, setLoading] = useState(false);
 
   function toggleDay(day: WorkoutDay) {
@@ -66,13 +70,22 @@ export default function CreateTeamScreen() {
     if (end <= start) return setError('End date must be after start date.');
 
     setError('');
+    setNoPaymentMethod(false);
     setLoading(true);
     try {
-      const team = await createTeam(user!.uid, name.trim(), wagerNum, start, end, timezone);
+      const team = await createTeam(user!.uid, name.trim(), wagerNum, start, end, timezone, currency);
       await setTeamMember(team.id, user!.uid, selectedDays);
+      // Charge wager escrow upfront
+      const chargeTeamEscrow = httpsCallable(functions, 'chargeTeamEscrow');
+      await chargeTeamEscrow({ teamId: team.id });
       router.replace(`/(app)/teams/${team.id}`);
     } catch (e: any) {
-      setError(e.message ?? 'Failed to create team.');
+      const msg: string = e.message ?? '';
+      if (msg.includes('No payment method')) {
+        setNoPaymentMethod(true);
+      } else {
+        setError(msg || 'Failed to create team.');
+      }
     } finally {
       setLoading(false);
     }
@@ -98,7 +111,7 @@ export default function CreateTeamScreen() {
         onChangeText={setName}
       />
 
-      <Text style={styles.label}>Wager per person ($)</Text>
+      <Text style={styles.label}>Wager per person ({currency.toUpperCase()})</Text>
       <TextInput
         style={styles.input}
         placeholder="e.g. 10"
@@ -107,6 +120,21 @@ export default function CreateTeamScreen() {
         onChangeText={setWager}
         keyboardType="decimal-pad"
       />
+
+      <Text style={styles.label}>Currency</Text>
+      <View style={styles.currencyRow}>
+        {(['cad', 'usd'] as const).map((c) => (
+          <TouchableOpacity
+            key={c}
+            style={[styles.currencyBtn, currency === c && styles.currencyBtnActive]}
+            onPress={() => setCurrency(c)}
+          >
+            <Text style={[styles.currencyBtnText, currency === c && styles.currencyBtnTextActive]}>
+              {c.toUpperCase()}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       <Text style={styles.label}>Start Date (YYYY-MM-DD)</Text>
       <TextInput
@@ -152,9 +180,19 @@ export default function CreateTeamScreen() {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <TouchableOpacity style={styles.button} onPress={handleCreate} disabled={loading}>
-        {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.buttonText}>Create Team</Text>}
-      </TouchableOpacity>
+      {noPaymentMethod ? (
+        <View style={styles.noPaymentBox}>
+          <Text style={styles.noPaymentText}>No payment method on file</Text>
+          <Text style={styles.noPaymentSub}>Add a card in your Wallet to pay the wager and activate your team.</Text>
+          <TouchableOpacity style={styles.button} onPress={() => router.push('/(app)/wallet')}>
+            <Text style={styles.buttonText}>Go to Wallet</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <TouchableOpacity style={styles.button} onPress={handleCreate} disabled={loading}>
+          {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.buttonText}>Create Team</Text>}
+        </TouchableOpacity>
+      )}
 
       {/* Timezone picker modal */}
       <Modal visible={tzPickerOpen} transparent animationType="slide">
@@ -207,6 +245,14 @@ const styles = StyleSheet.create({
   tzBtnText: { color: '#fff', fontSize: 15 },
   tzChevron: { color: '#555', fontSize: 14 },
   daysRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  currencyRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  currencyBtn: {
+    borderWidth: 1, borderColor: '#2a2a2a', borderRadius: 8,
+    paddingHorizontal: 20, paddingVertical: 10, backgroundColor: '#141414',
+  },
+  currencyBtnActive: { backgroundColor: '#fff', borderColor: '#fff' },
+  currencyBtnText: { color: '#555', fontSize: 14, fontWeight: '700' },
+  currencyBtnTextActive: { color: '#000' },
   dayBtn: {
     borderWidth: 1, borderColor: '#2a2a2a', borderRadius: 8,
     paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#141414',
@@ -221,6 +267,9 @@ const styles = StyleSheet.create({
     alignItems: 'center', marginTop: 32,
   },
   buttonText: { color: '#000', fontWeight: '700', fontSize: 15 },
+  noPaymentBox: { marginTop: 24 },
+  noPaymentText: { color: '#fff', fontSize: 15, fontWeight: '700', marginBottom: 6 },
+  noPaymentSub: { color: '#666', fontSize: 13, marginBottom: 0 },
   // Modal
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
   modalSheet: { backgroundColor: '#141414', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '60%' },

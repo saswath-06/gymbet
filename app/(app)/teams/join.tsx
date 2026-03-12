@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useAuth } from '../../../src/context/AuthContext';
 import { getTeamByInviteCode, joinTeam, setTeamMember } from '../../../src/lib/firestore';
 import type { WorkoutDay } from '../../../src/types';
@@ -16,6 +17,7 @@ const DAY_LABELS: Record<WorkoutDay, string> = {
 export default function JoinTeamScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const functions = getFunctions();
 
   const [code, setCode] = useState('');
   const [selectedDays, setSelectedDays] = useState<WorkoutDay[]>([]);
@@ -23,6 +25,7 @@ export default function JoinTeamScreen() {
   const [teamId, setTeamId] = useState('');
   const [step, setStep] = useState<'code' | 'days'>('code');
   const [error, setError] = useState('');
+  const [noPaymentMethod, setNoPaymentMethod] = useState(false);
   const [loading, setLoading] = useState(false);
 
   function toggleDay(day: WorkoutDay) {
@@ -52,13 +55,22 @@ export default function JoinTeamScreen() {
   async function handleJoin() {
     if (selectedDays.length === 0) return setError('Select at least one workout day.');
     setError('');
+    setNoPaymentMethod(false);
     setLoading(true);
     try {
       await joinTeam(teamId, user!.uid);
       await setTeamMember(teamId, user!.uid, selectedDays);
+      // Charge the wager escrow upfront
+      const chargeTeamEscrow = httpsCallable(functions, 'chargeTeamEscrow');
+      await chargeTeamEscrow({ teamId });
       router.replace(`/(app)/teams/${teamId}`);
     } catch (e: any) {
-      setError(e.message ?? 'Failed to join team.');
+      const msg: string = e.message ?? '';
+      if (msg.includes('No payment method')) {
+        setNoPaymentMethod(true);
+      } else {
+        setError(msg || 'Failed to join team.');
+      }
     } finally {
       setLoading(false);
     }
@@ -113,11 +125,22 @@ export default function JoinTeamScreen() {
             <Text style={styles.daysSelected}>{selectedDays.length} day{selectedDays.length !== 1 ? 's' : ''} selected</Text>
           )}
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-
-          <TouchableOpacity style={styles.button} onPress={handleJoin} disabled={loading}>
-            {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.buttonText}>Join Team</Text>}
-          </TouchableOpacity>
+          {noPaymentMethod ? (
+            <View style={styles.noPaymentBox}>
+              <Text style={styles.noPaymentText}>No payment method on file</Text>
+              <Text style={styles.noPaymentSub}>Add a card in your Wallet to pay the ${' '}wager and complete joining.</Text>
+              <TouchableOpacity style={styles.button} onPress={() => router.push('/(app)/wallet')}>
+                <Text style={styles.buttonText}>Go to Wallet</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+              <TouchableOpacity style={styles.button} onPress={handleJoin} disabled={loading}>
+                {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.buttonText}>Join Team</Text>}
+              </TouchableOpacity>
+            </>
+          )}
         </>
       )}
     </View>
@@ -150,4 +173,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', marginTop: 32,
   },
   buttonText: { color: '#000', fontWeight: '700', fontSize: 15 },
+  noPaymentBox: { marginTop: 24 },
+  noPaymentText: { color: '#fff', fontSize: 15, fontWeight: '700', marginBottom: 6 },
+  noPaymentSub: { color: '#666', fontSize: 13, marginBottom: 0 },
 });

@@ -8,6 +8,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import {
   getUserTeams, getTeamMembers, getWorkoutLog, getTeamMember, getUser,
 } from '../../src/lib/firestore';
+import { scheduleWorkoutReminders } from '../../src/lib/notifications';
 import type { TeamDoc, TeamMemberDoc, WorkoutDay } from '../../src/types';
 
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as WorkoutDay[];
@@ -64,6 +65,13 @@ export default function DashboardScreen() {
     );
 
     setCards(results);
+
+    // Collect all unique workout days across teams and schedule reminders
+    const allDays = results.flatMap((r) => r.myMember?.workoutDays ?? []);
+    const uniqueDays = [...new Set(allDays)] as WorkoutDay[];
+    if (uniqueDays.length > 0) {
+      scheduleWorkoutReminders(uniqueDays).catch(() => {/* permission denied or unsupported */});
+    }
   }
 
   useEffect(() => {
@@ -103,9 +111,14 @@ export default function DashboardScreen() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.teamsNavBtn} onPress={() => router.push('/(app)/teams')}>
-        <Text style={styles.teamsNavText}>All Teams →</Text>
-      </TouchableOpacity>
+      <View style={styles.navRow}>
+        <TouchableOpacity style={styles.teamsNavBtn} onPress={() => router.push('/(app)/teams')}>
+          <Text style={styles.teamsNavText}>All Teams →</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.teamsNavBtn} onPress={() => router.push('/(app)/wallet')}>
+          <Text style={styles.teamsNavText}>Wallet →</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Check-ins due today */}
       {dueCards.length > 0 && (
@@ -207,6 +220,7 @@ const styles = StyleSheet.create({
 
   teamsNavBtn: { alignSelf: 'flex-start', marginBottom: 28 },
   teamsNavText: { color: '#555', fontSize: 13 },
+  navRow: { flexDirection: 'row', gap: 24, marginBottom: 28 },
 
   sectionTitle: {
     color: '#444', fontSize: 11, fontWeight: '700',

@@ -28,7 +28,16 @@
     },
     "scheme": "gymbet",
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#0a0a0a",
+          "sounds": []
+        }
+      ],
+      "expo-web-browser"
     ],
     "extra": {
       "router": {},

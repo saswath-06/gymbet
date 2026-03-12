@@ -36,6 +36,7 @@ export async function createTeam(
   startDate: Date,
   endDate: Date,
   timezone: string,
+  currency: 'cad' | 'usd',
 ): Promise<TeamDoc> {
   const ref = doc(collection(db, 'teams'));
   const team: TeamDoc = {
@@ -49,6 +50,7 @@ export async function createTeam(
     memberIds: [creatorId],
     inviteCode: generateInviteCode(),
     timezone,
+    currency,
     createdAt: serverTimestamp() as Timestamp,
   };
   await setDoc(ref, team);
