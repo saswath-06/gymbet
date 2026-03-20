@@ -199,7 +199,7 @@ export default function CheckInScreen() {
             {status === 'capturing' ? (
               <ActivityIndicator color="#fff" size="large" />
             ) : (
-              <TouchableOpacity style={styles.shutter} onPress={handleCapture}>
+              <TouchableOpacity style={styles.shutter} onPress={handleCapture} testID="shutter-btn">
                 <View style={styles.shutterInner} />
               </TouchableOpacity>
             )}
