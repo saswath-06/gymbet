@@ -146,6 +146,15 @@ export async function getWorkoutLog(
   return snap.docs[0].data() as WorkoutLogDoc;
 }
 
+export async function activateTeam(teamId: string, requestingUid: string): Promise<void> {
+  const ref = doc(db, 'teams', teamId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('Team not found');
+  const team = snap.data() as TeamDoc;
+  if (team.creatorId !== requestingUid) throw new Error('Only the creator can activate this team.');
+  await updateDoc(ref, { status: 'active' });
+}
+
 export async function createWorkoutLog(
   teamId: string,
   userId: string,

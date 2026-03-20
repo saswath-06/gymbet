@@ -3,7 +3,8 @@ import {
   View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { getTeam, getTeamMembers, getUser, deleteTeam } from '../../../src/lib/firestore';
+import { getTeam, getTeamMembers, getUser, activateTeam } from '../../../src/lib/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useAuth } from '../../../src/context/AuthContext';
 import type { TeamDoc, TeamMemberDoc, UserDoc, WorkoutDay } from '../../../src/types';
 
@@ -22,6 +23,19 @@ export default function TeamDetailScreen() {
   const [users, setUsers] = useState<Record<string, UserDoc>>({});
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [activating, setActivating] = useState(false);
+
+  async function handleActivate() {
+    setActivating(true);
+    try {
+      await activateTeam(id, user!.uid);
+      setTeam((t) => t ? { ...t, status: 'active' } : t);
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Failed to activate team.');
+    } finally {
+      setActivating(false);
+    }
+  }
 
   function handleDelete() {
     Alert.alert(
@@ -35,7 +49,8 @@ export default function TeamDetailScreen() {
           onPress: async () => {
             setDeleting(true);
             try {
-              await deleteTeam(id, user!.uid);
+              const fn = httpsCallable(getFunctions(), 'deleteTeam');
+              await fn({ teamId: id });
               router.replace('/(app)/teams');
             } catch (e: any) {
               Alert.alert('Error', e.message ?? 'Failed to delete team.');
@@ -128,6 +143,19 @@ export default function TeamDetailScreen() {
         <Text style={styles.checkInBtnText}>📸  Check In Today</Text>
       </TouchableOpacity>
 
+      {user?.uid === team.creatorId && team.status === 'pending' && (
+        <TouchableOpacity
+          style={styles.activateBtn}
+          onPress={handleActivate}
+          disabled={activating}
+        >
+          {activating
+            ? <ActivityIndicator color="#000" />
+            : <Text style={styles.activateBtnText}>Start Team</Text>
+          }
+        </TouchableOpacity>
+      )}
+
       {user?.uid === team.creatorId && (
         <TouchableOpacity
           style={styles.deleteBtn}
@@ -218,6 +246,11 @@ const styles = StyleSheet.create({
   memberStats: { flexDirection: 'row', justifyContent: 'space-between' },
   memberStatMissed: { color: '#ff4d4d', fontSize: 12 },
   memberStatEarned: { color: '#4ade80', fontSize: 12 },
+  activateBtn: {
+    backgroundColor: '#4ade80', borderRadius: 12,
+    padding: 16, alignItems: 'center', marginBottom: 12,
+  },
+  activateBtnText: { color: '#000', fontWeight: '700', fontSize: 15 },
   deleteBtn: {
     borderWidth: 1, borderColor: '#3a0d0d', borderRadius: 12,
     padding: 14, alignItems: 'center', marginBottom: 28,

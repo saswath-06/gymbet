@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processDailyMissed = exports.chargeTeamEscrow = exports.onboardStripeConnect = exports.finalizeSetupSession = exports.createSetupSession = exports.verifyGymPhoto = void 0;
+exports.processDailyMissed = exports.chargeTeamEscrow = exports.deleteTeam = exports.onboardStripeConnect = exports.finalizeSetupSession = exports.createSetupSession = exports.verifyGymPhoto = void 0;
 const admin = __importStar(require("firebase-admin"));
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
@@ -196,6 +196,28 @@ exports.onboardStripeConnect = (0, https_1.onCall)({ secrets: ['STRIPE_SECRET_KE
     });
     return { url: accountLink.url };
 });
+// ─── deleteTeam ────────────────────────────────────────────────────────────────
+// Deletes a team and all its teamMember docs. Only the creator can call this.
+// Runs with admin SDK to bypass Firestore security rules.
+exports.deleteTeam = (0, https_1.onCall)(async (request) => {
+    if (!request.auth)
+        throw new https_1.HttpsError('unauthenticated', 'Must be signed in.');
+    const { teamId } = request.data;
+    if (!teamId)
+        throw new https_1.HttpsError('invalid-argument', 'teamId is required.');
+    const teamRef = db.collection('teams').doc(teamId);
+    const teamSnap = await teamRef.get();
+    if (!teamSnap.exists)
+        throw new https_1.HttpsError('not-found', 'Team not found.');
+    const team = teamSnap.data();
+    if (team.creatorId !== request.auth.uid) {
+        throw new https_1.HttpsError('permission-denied', 'Only the creator can delete this team.');
+    }
+    const membersSnap = await db.collection('teamMembers').where('teamId', '==', teamId).get();
+    await Promise.all(membersSnap.docs.map((d) => d.ref.delete()));
+    await teamRef.delete();
+    return { success: true };
+});
 // ─── chargeTeamEscrow ──────────────────────────────────────────────────────────
 // Charges the user's saved card for the team wager amount when joining or
 // creating a team. Stores the PaymentIntent ID on the teamMember doc.
@@ -258,6 +280,13 @@ function getYesterdayInTz(timezone) {
 exports.processDailyMissed = (0, scheduler_1.onSchedule)({ schedule: '0 9 * * *', timeZone: 'UTC', timeoutSeconds: 540, secrets: ['STRIPE_SECRET_KEY'] }, async () => {
     var _a, _b, _c;
     const stripe = getStripe();
+    // Auto-activate pending teams whose startDate has arrived
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const pendingSnap = await db.collection('teams').where('status', '==', 'pending').get();
+    await Promise.all(pendingSnap.docs
+        .filter((d) => d.data().startDate.toDate() <= today)
+        .map((d) => d.ref.update({ status: 'active' })));
     const teamsSnap = await db.collection('teams').where('status', '==', 'active').get();
     if (teamsSnap.empty)
         return;

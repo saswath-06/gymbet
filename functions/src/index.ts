@@ -199,6 +199,31 @@ export const onboardStripeConnect = onCall(
   }
 );
 
+// ─── deleteTeam ────────────────────────────────────────────────────────────────
+// Deletes a team and all its teamMember docs. Only the creator can call this.
+// Runs with admin SDK to bypass Firestore security rules.
+
+export const deleteTeam = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in.');
+  const { teamId } = request.data as { teamId: string };
+  if (!teamId) throw new HttpsError('invalid-argument', 'teamId is required.');
+
+  const teamRef = db.collection('teams').doc(teamId);
+  const teamSnap = await teamRef.get();
+  if (!teamSnap.exists) throw new HttpsError('not-found', 'Team not found.');
+
+  const team = teamSnap.data()!;
+  if (team.creatorId !== request.auth.uid) {
+    throw new HttpsError('permission-denied', 'Only the creator can delete this team.');
+  }
+
+  const membersSnap = await db.collection('teamMembers').where('teamId', '==', teamId).get();
+  await Promise.all(membersSnap.docs.map((d) => d.ref.delete()));
+  await teamRef.delete();
+
+  return { success: true };
+});
+
 // ─── chargeTeamEscrow ──────────────────────────────────────────────────────────
 // Charges the user's saved card for the team wager amount when joining or
 // creating a team. Stores the PaymentIntent ID on the teamMember doc.
@@ -277,6 +302,16 @@ export const processDailyMissed = onSchedule(
   { schedule: '0 9 * * *', timeZone: 'UTC', timeoutSeconds: 540, secrets: ['STRIPE_SECRET_KEY'] },
   async () => {
     const stripe = getStripe();
+
+    // Auto-activate pending teams whose startDate has arrived
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const pendingSnap = await db.collection('teams').where('status', '==', 'pending').get();
+    await Promise.all(
+      pendingSnap.docs
+        .filter((d) => d.data().startDate.toDate() <= today)
+        .map((d) => d.ref.update({ status: 'active' }))
+    );
 
     const teamsSnap = await db.collection('teams').where('status', '==', 'active').get();
     if (teamsSnap.empty) return;
